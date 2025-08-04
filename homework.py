@@ -5,7 +5,6 @@ import requests
 import sys
 import time
 
-
 from dotenv import load_dotenv
 from telebot import TeleBot
 
@@ -90,7 +89,7 @@ def check_response(response):
             raise KeyError(f'В словаре отсутствует ключ "{key}".')
     if not isinstance(response['homeworks'], list):
         raise TypeError('Ответ API не соответствует формату. '
-                        'Получен не словарь') 
+                        'Получен не словарь')
 
 
 def parse_status(homework):
