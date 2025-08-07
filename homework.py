@@ -16,7 +16,7 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 TOKEN_NAMES = ['PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID']
 
 RETRY_PERIOD = 600
-ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/5'
+ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
 HOMEWORK_VERDICTS = {
@@ -29,10 +29,7 @@ HOMEWORK_NAME = 'homework_name'
 STATUS_KEY = 'status'
 
 CHECK_TOKENS_MESSAGE = 'Проверка переменных окружения'
-TOKENS_ERROR_MESSAGE = (
-    'Отсутствует обязательная переменная окружения: {}. '
-    'Программа принудительно остановлена.'
-)
+TOKENS_ERROR_MESSAGE = ('Отсутствует обязательная переменная окружения: {}.')
 
 TELEGRAM_SEND_MESSAGE = 'Отправляем сообщение в чат Телеграмма.'
 SUCCESS_SEND_MESSAGE = 'Сообщение ({}) успешно отправленно.'
@@ -73,11 +70,9 @@ ERROR_MESSAGE = 'Сбой в работе программы: {error}'
 
 PAUSE_MESSAGE = 'Пауза {retry_period} секунд.'
 
+EMERGENCY_EXIT_MESSAGE = 'Программа принудительно остановлена.'
+
 logger = logging.getLogger(__name__)
-
-
-class TokenError(Exception):
-    """Исключение для выявления ошибки по отсутствующим токенам."""
 
 
 class TelegramSendError(Exception):
@@ -97,7 +92,7 @@ def check_tokens():
             error_tokens.append(name)
     if error_tokens:
         logger.critical(TOKENS_ERROR_MESSAGE.format(', '.join(error_tokens)))
-        raise TokenError
+        raise EnvironmentError
 
 
 def send_message(bot, message):
@@ -203,7 +198,8 @@ def main():
                 timestamp = response.get('current_date', timestamp)
             else:
                 logger.debug(NEW_STATUS_MISSING_MESSAGE)
-        except TokenError:
+        except EnvironmentError:
+            logger.error(EMERGENCY_EXIT_MESSAGE)
             sys.exit
         except TelegramSendError as error:
             logger.error(ERROR_MESSAGE.format(
