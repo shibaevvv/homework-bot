@@ -27,7 +27,7 @@ HOMEWORK_VERDICTS = {
 
 CHECK_TOKENS = 'Проверка переменных окружения'
 TOKENS_ERROR = (
-    'Отсутствует обязательная переменная окружения: {}.'
+    'Отсутствуют обязательные переменные окружения: {}.'
     'Программа принудительно остановлена.'
 )
 
@@ -38,22 +38,26 @@ TELEGRAM_SEND_ERROR = (
     'Ошибка отправки сообщения в Телеграм: {error}. Текст сообщения: {message}'
 )
 
-PARAMS = 'url = {url}, headers = {headers}, params = {params}'
+PARAMS = (
+    'Параметры запроса: '
+    'url = {url}, headers = {headers}, params = {params}'
+)
 API_ANSWER_ERROR = (
-    f'Ошибка при запросе к API: {{error}}. Параметры запроса: {PARAMS}'
+    f'Ошибка при запросе к API: {{error}}. {PARAMS}'
 )
 API_HTTP_ERROR = (
-    'Ошибка при запросе к API, ответ вернул статус - {code}. '
-    f'Параметры запроса: {PARAMS}'
+    f'Ошибка при запросе к API, ответ вернул статус - {{code}}. {PARAMS}'
 )
 ERROR_IN_RESPONSE = (
-    'Ошибка при запросе к API, получен ответ: {response}. '
-    f'Параметры запроса: {PARAMS}'
+    f'Ошибка при запросе к API, получен ответ: {{key}}: {{value}}. {PARAMS}'
 )
 
-WRONG_TYPE_ERROR = (
-    'Ответ API не соответствует формату. '
-    'Получен не {expected}, а {type}'
+RESPONSE_NOT_DICT_ERROR = (
+    'Ответ API не соответствует формату. Получен не словарь, а {type}'
+)
+HOMEWORKS_NOT_LIST_ERROR = (
+    'Ответ API не соответствует формату. Значение ключа homeworks не список '
+    ', а {type}'
 )
 
 MISSING_KEY = 'В словаре отсутствует ключ {key}.'
@@ -67,7 +71,7 @@ NEW_STATUS_MISSING = 'Новый статус домашки отсутству�
 
 ERROR = 'Сбой в работе программы: {error}'
 
-PAUSE = f'Пауза {RETRY_PERIOD} секунд.'
+STARTING_BOT = '***** Старт бота *****'
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +81,7 @@ class HttpStatusError(Exception):
 
 
 class APIResponseError(Exception):
-    """Исключение для выявления ошибочных ключей в ответе API."""
+    """Исключение для ключей в ответе API, указывающих на проблемы."""
 
 
 def check_tokens():
@@ -97,8 +101,12 @@ def send_message(bot, message):
         logger.debug(TELEGRAM_SEND_SUCCESS.format(message))
         return True
     except Exception as error:
-        logger.exception(TELEGRAM_SEND_ERROR.format(error=error,
-                                                    message=message))
+        logger.exception(
+            TELEGRAM_SEND_ERROR.format(
+                error=error,
+                message=message
+            )
+        )
         return False
 
 
@@ -106,9 +114,8 @@ def get_api_answer(timestamp):
     """
     Функция возвращает словарь с данными из ответа API-сервиса.
     Если запрос вернул статус отличный от успешного, то репортим о
-    неудаче в лог и пользователю в чат.
-    Параметром выступает временная метка с которой происходит проверка
-    ответов.
+    неудаче в лог. Параметром выступает временная метка с которой
+    происходит проверка ответов.
     """
     request_params = dict(
         url=ENDPOINT, headers=HEADERS, params={'from_date': timestamp}
@@ -116,30 +123,40 @@ def get_api_answer(timestamp):
     try:
         response = requests.get(**request_params)
     except requests.RequestException as error:
-        raise ConnectionError(API_ANSWER_ERROR.format(
-            error=error, **request_params))
+        raise ConnectionError(
+            API_ANSWER_ERROR.format(
+                error=error,
+                **request_params
+            )
+        ) from error
     if response.status_code != HTTPStatus.OK:
-        raise HttpStatusError(API_HTTP_ERROR.format(
-            code=response.status_code, **request_params))
+        raise HttpStatusError(
+            API_HTTP_ERROR.format(
+                code=response.status_code,
+                **request_params
+            )
+        )
     response = response.json()
     for key in ['error', 'code']:
         if key in response:
-            raise APIResponseError(ERROR_IN_RESPONSE.format(
-                response=f'{key}: {str(response[key])}', **request_params))
+            raise APIResponseError(
+                ERROR_IN_RESPONSE.format(
+                    key=key,
+                    value=str(response[key]),
+                    **request_params
+                )
+            )
     return response
 
 
 def check_response(response):
     """Функция проверяет ответ API-сервиса на форматы из документации."""
     if not isinstance(response, dict):
-        raise TypeError(WRONG_TYPE_ERROR.format(
-            expected='словарь', type=type(response)))
+        raise TypeError(RESPONSE_NOT_DICT_ERROR.format(type=type(response)))
     if 'homeworks' not in response:
         raise KeyError(MISSING_KEY.format(key='homeworks'))
-    homeworks = response['homeworks']
-    if not isinstance(homeworks, list):
-        raise TypeError(WRONG_TYPE_ERROR.format(
-            expected='список', type=type(homeworks)))
+    if not isinstance((homeworks := response['homeworks']), list):
+        raise TypeError(HOMEWORKS_NOT_LIST_ERROR.format(type=type(homeworks)))
 
 
 def parse_status(homework):
@@ -147,8 +164,7 @@ def parse_status(homework):
     for key in ['homework_name', 'status']:
         if key not in homework:
             raise KeyError(MISSING_KEY.format(key=key))
-    status = homework['status']
-    if status not in HOMEWORK_VERDICTS:
+    if (status := homework['status']) not in HOMEWORK_VERDICTS:
         raise ValueError(WRONG_STATUS.format(status=status))
     return CHANGED_STATUS.format(
         name=homework['homework_name'],
@@ -167,21 +183,20 @@ def main():
         try:
             response = get_api_answer(timestamp)
             check_response(response)
-            homeworks = response['homeworks']
-            if homeworks:
-                message = parse_status(homeworks[0])
-                if last_message != message and send_message(bot, message):
-                    last_message = message
-                    timestamp = response.get('current_date', timestamp)
-            else:
+            if not (homeworks := response['homeworks']):
                 logger.debug(NEW_STATUS_MISSING)
+                continue
+            if last_message != (message := parse_status(homeworks[0])) and (
+                send_message(bot, message)
+            ):
+                last_message = message
+                timestamp = response.get('current_date', timestamp)
+                error_message = None
         except Exception as error:
-            message = ERROR.format(error=error)
-            logger.error(message)
+            logger.error(message := ERROR.format(error=error))
             if message != error_message and send_message(bot, message):
                 error_message = message
         finally:
-            logger.debug(PAUSE)
             time.sleep(RETRY_PERIOD)
 
 
@@ -193,5 +208,5 @@ if __name__ == '__main__':
         handlers=[logging.FileHandler(f'{__file__}.log'),
                   logging.StreamHandler(sys.stdout)]
     )
-    logger.info('***** Старт бота *****')
+    logger.info(STARTING_BOT)
     main()
