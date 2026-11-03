@@ -40,7 +40,7 @@ TELEGRAM_SEND_ERROR = (
 
 PARAMS = (
     'Параметры запроса: '
-    'url = {url}, headers = {headers}, params = {params}'
+    'url = {url}, params = {params}'
 )
 API_ANSWER_ERROR = (
     f'Ошибка при запросе к API: {{error}}. {PARAMS}'
