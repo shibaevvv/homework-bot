@@ -16,6 +16,7 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 TOKEN_NAMES = ['PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID']
 
 RETRY_PERIOD = 600
+REQUEST_TIMEOUT = (5, 30)
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
@@ -121,7 +122,7 @@ def get_api_answer(timestamp):
         url=ENDPOINT, headers=HEADERS, params={'from_date': timestamp}
     )
     try:
-        response = requests.get(**request_params)
+        response = requests.get(**request_params, timeout=REQUEST_TIMEOUT)
     except requests.RequestException as error:
         raise ConnectionError(
             API_ANSWER_ERROR.format(
